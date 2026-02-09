@@ -7,6 +7,25 @@
     <IsTrimmable>true</IsTrimmable>
     <IsAotCompatible>true</IsAotCompatible>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    
   </PropertyGroup>
 
+  <PropertyGroup>
+    <PackageId>PlainToolkit.CngProtectedData</PackageId>
+    <Version>1.0.0</Version>
+    <Title>PlainToolkit.CngProtectedData</Title>
+    <Authors>PCL Community</Authors>
+    <Description>A ProtectedData implementation based on CNG DPAPI.</Description>
+    <PackageProjectUrl>https://github.com/PCL-Community/PlainToolkit.CngProtectedData</PackageProjectUrl>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>ProtectedData, CNG, DPAPI</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/PCL-Community/PlainToolkit.CngProtectedData</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 </Project>
