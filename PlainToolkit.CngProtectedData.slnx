@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="tests/PlainToolkit.CngProtectedData.Tests/PlainToolkit.CngProtectedData.Tests.csproj" />
+  <Project Path="src/PlainToolkit.CngProtectedData/PlainToolkit.CngProtectedData.csproj" />
+</Solution>
