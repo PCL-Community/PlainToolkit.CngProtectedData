@@ -4,11 +4,9 @@
 // 代码修改自 System.Security.Cryptography.ProtectedData
 // 源代码：https://github.com/dotnet/runtime/blob/main/src/libraries/System.Security.Cryptography.ProtectedData/src/System/Security/Cryptography/ProtectedData.cs
 
-using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
-using System.Threading.Channels;
 using PlainToolkit.CngProtectedData.Native;
 
 namespace PlainToolkit.CngProtectedData;
@@ -16,7 +14,7 @@ namespace PlainToolkit.CngProtectedData;
 public static class CngProtectedData
 {
     private static readonly byte[] s_nonEmpty = new byte[1];
-    private static readonly byte version = 1;
+    private static readonly byte Version = 1;
 
     public static byte[] Protect(byte[] userData, byte[]? optionalEntropy, DataProtectionScope scope)
     {
@@ -342,7 +340,7 @@ public static class CngProtectedData
         unsafe
         {
             var relevantData = inputData.IsEmpty ? s_nonEmpty : inputData;
-            var processedData = protect ? Pack(relevantData, optionalEntropy) : Unpack(relevantData, optionalEntropy);
+            var processedData = protect ? Pack(relevantData, optionalEntropy) : relevantData;
 
             fixed (byte* pInputData = processedData)
             {
@@ -367,7 +365,7 @@ public static class CngProtectedData
                             hDescriptor,
                             0,
                             (IntPtr)pInputData,
-                            (uint)relevantData.Length,
+                            (uint)processedData.Length,
                             IntPtr.Zero,
                             IntPtr.Zero,
                             out pbOutput,
@@ -380,7 +378,7 @@ public static class CngProtectedData
                             out hDescriptor,
                             0,
                             (IntPtr)pInputData,
-                            (uint)relevantData.Length,
+                            (uint)processedData.Length,
                             IntPtr.Zero,
                             IntPtr.Zero,
                             out pbOutput,
@@ -394,27 +392,59 @@ public static class CngProtectedData
                     
                     var length = (int)cbOutput;
 
+                    
+                    
                     // 分配新数组
                     if (allocateArray)
                     {
-                        outputData = new byte[length];
-                        Marshal.Copy(pbOutput, outputData, 0, length);
-                        bytesWritten = length;
+                        if (protect)
+                        {
+                            outputData = new byte[length];
+                            Marshal.Copy(pbOutput, outputData, 0, length);
+                            bytesWritten = length;
+                        }
+                        else
+                        {
+                            outputData = Unpack(new ReadOnlySpan<byte>((byte*)pbOutput, length), optionalEntropy);
+                            bytesWritten = outputData.Length;
+                        }
+                       
                         return true;
                     }
                     
                     // 如果不分配新数组，则写入目标缓冲区
                     outputData = null;
-                    // 判断输出缓冲区是否足够大
-                    if (length > outputSpan.Length)
-                    {
-                        bytesWritten = 0;
-                        return false;
-                    }
 
-                    // 从内存拷贝到目标缓冲区
-                    new ReadOnlySpan<byte>((void*)pbOutput, length).CopyTo(outputSpan);
-                    bytesWritten = length;
+                    if (protect)
+                    {
+                        // 判断输出缓冲区是否足够大
+                        if (length > outputSpan.Length)
+                        {
+                            bytesWritten = 0;
+                            return false;
+                        }
+
+                        // 从内存拷贝到目标缓冲区
+                        new ReadOnlySpan<byte>((void*)pbOutput, length).CopyTo(outputSpan);
+                        bytesWritten = length;
+                    }
+                    else
+                    {
+                        var unpacked = Unpack(
+                            new ReadOnlySpan<byte>((void*)pbOutput, length),
+                            optionalEntropy);
+
+                        // 判断输出缓冲区是否足够大
+                        if (unpacked.Length > outputSpan.Length)
+                        {
+                            bytesWritten = 0;
+                            return false;
+                        }
+
+                        unpacked.CopyTo(outputSpan);
+                        bytesWritten = unpacked.Length;
+                    }
+                    
                     return true;
                 }
                 finally
@@ -460,7 +490,7 @@ public static class CngProtectedData
         var header = new ProtectedHeader
         {
             Magic = ProtectedHeader.MagicValue,
-            Version = version,
+            Version = Version,
             Flags = (byte)flags,
             Reserved = 0
         };
