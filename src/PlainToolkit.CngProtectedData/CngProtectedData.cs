@@ -548,6 +548,12 @@ public static class CngProtectedData
         if ((header.Flags & (byte)ProtectedFlags.HasEntropy) != 0)
         {
             // 有可选熵，解密
+
+            // 验证可选熵是否为空
+            if (optionalEntropy.IsEmpty)
+            {
+                throw new ArgumentException("Optional entropy is required.", nameof(optionalEntropy));
+            }
             
             // 提取 Nonce, Ciphertext, Tag
             var nonce = data.Slice(8, 12);
