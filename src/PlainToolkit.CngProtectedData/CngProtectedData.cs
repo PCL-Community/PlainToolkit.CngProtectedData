@@ -520,7 +520,7 @@ public static class CngProtectedData
             var cipher = buffer.AsSpan(20, data.Length);
             var tag = buffer.AsSpan(20 + data.Length, 16);
             
-            using var aes = new AesGcm(key, 32);
+            using var aes = new AesGcm(key, 16);
             aes.Encrypt(nonce, data, cipher, tag, buffer.AsSpan(0, 8));
         }
         else
@@ -561,7 +561,7 @@ public static class CngProtectedData
             Span<byte> key = stackalloc byte[32];
             SHA256.HashData(optionalEntropy, key);
             
-            using var aes = new AesGcm(key, 32);
+            using var aes = new AesGcm(key, 16);
             
             aes.Decrypt(nonce, cipher, tag, buffer, data[..8]);
         }
