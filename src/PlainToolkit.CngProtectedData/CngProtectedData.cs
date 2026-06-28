@@ -4,9 +4,11 @@
 // 代码修改自 System.Security.Cryptography.ProtectedData
 // 源代码：https://github.com/dotnet/runtime/blob/main/src/libraries/System.Security.Cryptography.ProtectedData/src/System/Security/Cryptography/ProtectedData.cs
 
+using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Threading.Channels;
 using PlainToolkit.CngProtectedData.Native;
 
 namespace PlainToolkit.CngProtectedData;
@@ -14,6 +16,7 @@ namespace PlainToolkit.CngProtectedData;
 public static class CngProtectedData
 {
     private static readonly byte[] s_nonEmpty = new byte[1];
+    private static readonly byte version = 1;
 
     public static byte[] Protect(byte[] userData, byte[]? optionalEntropy, DataProtectionScope scope)
     {
@@ -329,12 +332,6 @@ public static class CngProtectedData
         bool allocateArray,
         Span<byte> outputSpan = default)
     {
-        if (!optionalEntropy.IsEmpty)
-        {
-            // TODO: 支持可选熵
-            throw new PlatformNotSupportedException("CNG DPAPI with LOCAL providers does not support optional entropy.");
-        }
-
         var descriptorRule = scope switch
         {
             DataProtectionScope.CurrentUser => "LOCAL=user",
@@ -345,8 +342,9 @@ public static class CngProtectedData
         unsafe
         {
             var relevantData = inputData.IsEmpty ? s_nonEmpty : inputData;
+            var processedData = protect ? Pack(relevantData, optionalEntropy) : Unpack(relevantData, optionalEntropy);
 
-            fixed (byte* pInputData = relevantData)
+            fixed (byte* pInputData = processedData)
             {
                 int hresult;
                 var hDescriptor = IntPtr.Zero;
@@ -447,5 +445,103 @@ public static class CngProtectedData
         {
             throw new PlatformNotSupportedException();
         }
+    }
+
+    // PlainToolkit.CngProtectedData 的自定义包装数据如下：
+    // 无可选熵：
+    // [header(8 byte)][data(? byte)]
+    // 有可选熵（使用 AES-GCM 实现可选熵）：
+    // [header(8 byte)][nonce(12 byte)][ciphertext(? byte)][tag(16 byte)]
+    
+    private static byte[] Pack(ReadOnlySpan<byte> data, ReadOnlySpan<byte> optionalEntropy = default)
+    {
+        var flags = optionalEntropy.IsEmpty ? ProtectedFlags.None : ProtectedFlags.HasEntropy;
+        
+        var header = new ProtectedHeader
+        {
+            Magic = ProtectedHeader.MagicValue,
+            Version = version,
+            Flags = (byte)flags,
+            Reserved = 0
+        };
+
+        byte[] buffer;
+
+        // 判断是否有可选熵
+        if ((flags & ProtectedFlags.HasEntropy) != 0)
+        {
+            // 由于 CNG DPAPI 并不支持可选熵，因此使用自定义的 Header 与 AES-GCM 模拟可选熵，最终在调用端无感知
+            
+            // 初始化缓冲区
+            buffer = new byte[8 + 12 + data.Length + 16]; // header + nonce + ciphertext + tag
+            
+            // 将 header 写入缓冲区
+            MemoryMarshal.Write(buffer, in header);
+            
+            // 根据可选熵生成 Key
+            Span<byte> key = stackalloc byte[32];
+            SHA256.HashData(optionalEntropy, key);
+            
+            // 随机生成 Nonce
+            var nonce = buffer.AsSpan(8, 12);
+            RandomNumberGenerator.Fill(nonce);
+            
+            // 将 buffer 对应位置转为 Span
+            var cipher = buffer.AsSpan(20, data.Length);
+            var tag = buffer.AsSpan(20 + data.Length, 16);
+            
+            using var aes = new AesGcm(key, 32);
+            aes.Encrypt(nonce, data, cipher, tag, buffer.AsSpan(0, 8));
+        }
+        else
+        {
+            // 无可选熵则直接写入 header 与 data
+            buffer = new byte[8 + data.Length]; // header + data
+            MemoryMarshal.Write(buffer, in header);
+            data.CopyTo(buffer.AsSpan(8));
+        }
+        
+        return buffer;
+    }
+
+    private static byte[] Unpack(ReadOnlySpan<byte> data, ReadOnlySpan<byte> optionalEntropy = default)
+    {
+        var header = MemoryMarshal.Read<ProtectedHeader>(data);
+        
+        if (header.Magic != ProtectedHeader.MagicValue)
+        {
+            throw new ArgumentException("Invalid protected data format.");
+        }
+
+        byte[] buffer;
+        
+        if ((header.Flags & (byte)ProtectedFlags.HasEntropy) != 0)
+        {
+            // 有可选熵，解密
+            
+            // 提取 Nonce, Ciphertext, Tag
+            var nonce = data.Slice(8, 12);
+            var cipher = data.Slice(20, data.Length - 36);
+            var tag = data[^16..];
+            
+            // 初始化缓冲区
+            buffer = new byte[cipher.Length];
+            
+            // 根据可选熵生成 Key
+            Span<byte> key = stackalloc byte[32];
+            SHA256.HashData(optionalEntropy, key);
+            
+            using var aes = new AesGcm(key, 32);
+            
+            aes.Decrypt(nonce, cipher, tag, buffer, data[..8]);
+        }
+        else
+        {
+            // 处理无可选熵的情况
+            buffer = new byte[data.Length - 8];
+            data[8..].CopyTo(buffer);
+        }
+        
+        return buffer;
     }
 }
