@@ -31,6 +31,29 @@ public class CngProtectedDataTests(ITestOutputHelper output)
     }
     
     [SkippableFact]
+    public void CurrentUserTestWithOptionalEntropy()
+    {
+        SkipIfNotWindows();
+        
+        byte[] originalData = [1, 1, 4, 5, 1, 4];
+        byte[] optionalEntropy = [1, 9, 1, 9, 8, 1, 0];
+        var scope = DataProtectionScope.CurrentUser;
+        
+        // 加密
+        var encrypted = CngProtectedData.Protect(originalData, optionalEntropy, scope);
+        // 解密
+        var decrypted = CngProtectedData.Unprotect(encrypted, optionalEntropy, scope);
+        
+        output.WriteLine(BitConverter.ToString(originalData));
+        output.WriteLine(BitConverter.ToString(encrypted));
+        output.WriteLine(BitConverter.ToString(decrypted));
+        
+        Assert.NotNull(encrypted);
+        Assert.NotEqual(originalData, encrypted);
+        Assert.Equal(originalData, decrypted);
+    }
+    
+    [SkippableFact]
     public void LocalMachineTest()
     {
         SkipIfNotWindows();
@@ -42,6 +65,29 @@ public class CngProtectedDataTests(ITestOutputHelper output)
         var encrypted = CngProtectedData.Protect(originalData, null, scope);
         // 解密
         var decrypted = CngProtectedData.Unprotect(encrypted, null, scope);
+        
+        output.WriteLine(BitConverter.ToString(originalData));
+        output.WriteLine(BitConverter.ToString(encrypted));
+        output.WriteLine(BitConverter.ToString(decrypted));
+        
+        Assert.NotNull(encrypted);
+        Assert.NotEqual(originalData, encrypted);
+        Assert.Equal(originalData, decrypted);
+    }
+    
+    [SkippableFact]
+    public void LocalMachineTestWithOptionalEntropy()
+    {
+        SkipIfNotWindows();
+        
+        byte[] originalData = [1, 1, 4, 5, 1, 4];
+        byte[] optionalEntropy = [1, 9, 1, 9, 8, 1, 0];
+        var scope = DataProtectionScope.LocalMachine;
+        
+        // 加密
+        var encrypted = CngProtectedData.Protect(originalData, optionalEntropy, scope);
+        // 解密
+        var decrypted = CngProtectedData.Unprotect(encrypted, optionalEntropy, scope);
         
         output.WriteLine(BitConverter.ToString(originalData));
         output.WriteLine(BitConverter.ToString(encrypted));
