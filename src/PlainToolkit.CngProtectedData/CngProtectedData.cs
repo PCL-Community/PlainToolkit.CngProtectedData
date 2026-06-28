@@ -522,6 +522,9 @@ public static class CngProtectedData
             
             using var aes = new AesGcm(key, 16);
             aes.Encrypt(nonce, data, cipher, tag, buffer.AsSpan(0, 8));
+            
+            // 清空 Key 内存
+            CryptographicOperations.ZeroMemory(key);
         }
         else
         {
@@ -570,6 +573,9 @@ public static class CngProtectedData
             using var aes = new AesGcm(key, 16);
             
             aes.Decrypt(nonce, cipher, tag, buffer, data[..8]);
+            
+            // 清空 Key 内存
+            CryptographicOperations.ZeroMemory(key);
         }
         else
         {
