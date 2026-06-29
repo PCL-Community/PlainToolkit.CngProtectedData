@@ -539,11 +539,18 @@ public static class CngProtectedData
 
     private static byte[] Unpack(ReadOnlySpan<byte> data, ReadOnlySpan<byte> optionalEntropy = default)
     {
+        if (data.Length < 8)
+        {
+            // 数据可能是 1.x 的 CngProtectedData 生成，完全无 Pack，直接返回
+            return data.ToArray();
+        }
+        
         var header = MemoryMarshal.Read<ProtectedHeader>(data);
         
         if (header.Magic != ProtectedHeader.MagicValue)
         {
-            throw new ArgumentException("Invalid protected data format.");
+            // 数据可能是 1.x 的 CngProtectedData 生成，完全无 Pack，直接返回
+            return data.ToArray();
         }
 
         byte[] buffer;
